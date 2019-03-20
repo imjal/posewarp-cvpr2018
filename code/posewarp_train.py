@@ -19,7 +19,7 @@ def train(model_name, gpu_id):
     if not os.path.isdir(network_dir):
         os.mkdir(network_dir)
 
-    train_feed = data_generation.create_feed(params, params['data_dir'], 'train')
+    train_feed = data_generation.create_feed_canon(params, params['data_dir'], 'train')
 
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
     config = tf.ConfigProto()
@@ -32,10 +32,10 @@ def train(model_name, gpu_id):
     model = networks.network_posewarp(params)
     model.compile(optimizer=Adam(lr=1e-4), loss=[networks.vgg_loss(vgg_model, response_weights, 12)])
 
-    #model.summary()
+    model.summary()
     n_iters = params['n_training_iter']
 
-    for step in range(0, n_iters):
+    for step in range(n_iters+1):
         x, y = next(train_feed)
 
         train_loss = model.train_on_batch(x, y)
@@ -50,4 +50,5 @@ if __name__ == "__main__":
     if len(sys.argv) != 3:
         print("Need model name and gpu id as command line arguments.")
     else:
+        import pdb
         train(sys.argv[1], sys.argv[2])

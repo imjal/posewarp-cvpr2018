@@ -18,7 +18,7 @@ def train(model_name, gpu_id):
     if not os.path.isdir(network_dir):
         os.mkdir(network_dir)
 
-    train_feed = data_generation.create_feed(params, params['data_dir'], 'train')
+    train_feed = data_generation.create_feed_canon(params, params['data_dir'], 'train')
 
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
     config = tf.ConfigProto()
@@ -30,7 +30,7 @@ def train(model_name, gpu_id):
     disc_loss = 0.1
 
     generator = networks.network_posewarp(params)
-    generator.load_weights('../models/vgg_100000.h5')
+    generator.load_weights('/home/jl5/posewarp-cvpr2018/models/orig-model-gan/9000.h5')
 
     discriminator = networks.discriminator(params)
     discriminator.compile(loss='binary_crossentropy', optimizer=Adam(lr=disc_lr))
@@ -57,27 +57,7 @@ def train(model_name, gpu_id):
         x_tgt_img_disc = np.concatenate((y, gen))
         x_src_pose_disc = np.concatenate((x[1], x[1]))
         x_tgt_pose_disc = np.concatenate((x[2], x[2]))
-
-        L = np.zeros([2 * batch_size])
-        L[0:batch_size] = 1
-
-        inputs = [x_tgt_img_disc, x_src_pose_disc, x_tgt_pose_disc]
-        d_loss = discriminator.train_on_batch(inputs, L)
-
-        # Train the discriminator a couple of iterations before starting the gan
-        if step < 5:
-            util.printProgress(step, 0, [0, d_loss])
-            step += 1
-            continue
-
-        # TRAIN GAN
-        L = np.ones([batch_size])
-        x, y = next(train_feed)
-        g_loss = gan.train_on_batch(x, [y, L])
-        util.printProgress(step, 0, [g_loss[1], d_loss])
-
-        if step % params['model_save_interval'] == 0 and step > 0:
-            generator.save(network_dir + '/' + str(step) + '.h5')
+        pdb.set_trace()
 
 
 if __name__ == "__main__":

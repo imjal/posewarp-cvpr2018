@@ -4,12 +4,18 @@ import cv2
 import transformations
 import scipy.io as sio
 import glob
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from PIL import Image
+import pdb
+import pickle
+import glob
 
 
 def make_vid_info_list(data_dir):
     vids = glob.glob(data_dir + '/frames/*')
     n_vids = len(vids)
-
+    print(n_vids)
     vid_info = []
 
     for i in range(n_vids):
@@ -22,6 +28,65 @@ def make_vid_info_list(data_dir):
 
         vid_info.append([info, box, x, vids[i]])
 
+    #show_box_and_keypoints('/home/jl5/posewarp-cvpr2018/data/train/frames/Flavia Pennetta in 4k/1.jpg', box, x)
+
+    return vid_info
+
+def show_box_and_keypoints(img_str, box, x, frame_num):
+
+    im = np.array(Image.open(img_str), dtype=np.uint8)
+    fig,ax = plt.subplots(1)
+    x = x[:, :, frame_num] - 1.0
+    plt.scatter(x[:, 0], x[:, 1])
+    ax.imshow(im)
+    coord = box[frame_num, :]
+    rect = patches.Rectangle((coord[0],coord[1]),coord[2], coord[3],linewidth=1,edgecolor='r',facecolor='none')
+    ax.add_patch(rect)
+    plt.show()
+
+def show_keypoints(im, x):
+    fig,ax = plt.subplots(1)
+    plt.scatter(x[:, 0], x[:, 1])
+    ax.imshow(im)
+    plt.show()
+    plt.savefig("/home/jl5/img1.png")
+
+def make_vid_info_list_pickled(data_dir):
+    vids = glob.glob(data_dir + '/orig-frames/*')
+    n_vids = len(vids)
+    vid_path = "/home/jl5/pytorch-EverybodyDanceNow/code/"
+    vid_info = []
+
+    for i in range(9):
+        keypoints = pickle.load(open(vid_path + "keypoints_vid"+str(i)+".pkl", "rb"))
+        keypoints[:, 0, :] = keypoints[:, 0, :]*1.40625 + 280
+        keypoints[:, 1, :] = keypoints[:, 1, :]*1.40625
+        boxes = pickle.load(open(vid_path + "boxes_vid" + str(i) + ".pkl", "rb"))
+        boxes[:, 0] = boxes[:, 0]*1.40625 + 280
+        boxes[:, 1] = boxes[:, 1]*1.40625
+        boxes[:, 2] = boxes[:, 2]*1.40625
+        boxes[:, 3] = boxes[:, 3]*1.40625
+        vid_info.append([{"X": keypoints, "bbox": boxes}, boxes, keypoints, "/data/jl5/data-posewarp/train/orig-frames/" + str(i)])
+        #show_box_and_keypoints('/data/jl5/data-posewarp/train/orig-frames/' + str(i) + '/000001.png', boxes, keypoints, 0)
+    return vid_info
+
+def make_vid_info_list_pickled_test(data_dir):
+    vids = glob.glob(data_dir + '/orig-frames/*')
+    n_vids = len(vids)
+    vid_path = "/home/jl5/pytorch-EverybodyDanceNow/code/"
+    vid_info = []
+
+    i = 9
+    keypoints = pickle.load(open(vid_path + "keypoints_vid"+str(i)+".pkl", "rb"))
+    keypoints[:, 0, :] = keypoints[:, 0, :]*1.40625 + 280
+    keypoints[:, 1, :] = keypoints[:, 1, :]*1.40625
+    boxes = pickle.load(open(vid_path + "boxes_vid" + str(i) + ".pkl", "rb"))
+    boxes[:, 0] = boxes[:, 0]*1.40625 + 280
+    boxes[:, 1] = boxes[:, 1]*1.40625
+    boxes[:, 2] = boxes[:, 2]*1.40625
+    boxes[:, 3] = boxes[:, 3]*1.40625
+    vid_info.append([{"X": keypoints, "bbox": boxes}, boxes, keypoints, "/data/jl5/data-posewarp/train/orig-frames/" + str(i)])
+    #show_box_and_keypoints('/data/jl5/data-posewarp/train/orig-frames/' + str(i) + '/000001.png', boxes, keypoints, 0)
     return vid_info
 
 
@@ -31,15 +96,29 @@ def get_person_scale(joints):
     lcalf_size = np.sqrt((joints[12][1] - joints[13][1]) ** 2 + (joints[12][0] - joints[13][0]) ** 2)
     calf_size = (lcalf_size + rcalf_size) / 2.0
 
-    size = np.max([2.5 * upper_body_size, 5.0 * calf_size])
+    rforearm_size = np.sqrt((joints[3][1] - joints[4][1]) ** 2 + (joints[3][0] - joints[4][0]) ** 2)
+    lforearm_size = np.sqrt((joints[6][1] - joints[7][1]) ** 2 + (joints[6][0] - joints[7][0]) ** 2)
+    forearm_size = (lforearm_size + rforearm_size) / 2.0 
+    size = np.max([2.5 * upper_body_size, 5.0 * forearm_size])
+    if size <= 0:
+        return 1
     return size / 200.0
 
-
-def read_frame(vid_name, frame_num, box, x):
-    img_name = os.path.join(vid_name, str(frame_num + 1) + '.jpg')
+"""
+    img_name = os.path.join(vid_name, f'{frame_num +1:06d}' + '.png')
     if not os.path.isfile(img_name):
-        img_name = os.path.join(vid_name, str(frame_num + 1) + '.png')
-
+        img_name = os.path.join(vid_name, f'{frame_num +1:06d}' + '.jpg')
+"""
+def read_frame(vid_name, frame_num, box, x):
+    
+    img_name = os.path.join(vid_name, f'{frame_num +1:06d}' + '.png')
+    if not os.path.isfile(img_name):
+        img_name = os.path.join(vid_name, f'{frame_num +1:06d}' + '.jpg')
+    """
+    img_name = os.path.join(vid_name, str(frame_num + 1) + '.png')
+    if not os.path.isfile(img_name):
+        img_name = os.path.join(vid_name, str(frame_num + 1) + '.jpg')
+    """
     img = cv2.imread(img_name)
     joints = x[:, :, frame_num] - 1.0
     box_frame = box[frame_num, :]
@@ -71,8 +150,8 @@ def warp_example_generator(vid_info_list, param, do_augment=True, return_pose_ve
         x_posevec_src = np.zeros((batch_size, n_joints * 2))
         x_posevec_tgt = np.zeros((batch_size, n_joints * 2))
         y = np.zeros((batch_size, img_height, img_width, 3))
-
-        for i in range(batch_size):
+        i = 0
+        while i < batch_size:
 
             # 1. choose random video.
             vid = np.random.choice(len(vid_info_list), 1)[0]
@@ -88,17 +167,28 @@ def warp_example_generator(vid_info_list, param, do_augment=True, return_pose_ve
                 frames = np.random.choice(n_frames, 2, replace=False)
 
             I0, joints0, scale0, pos0 = read_frame(vid_path, frames[0], vid_bbox, vid_x)
-            I1, joints1, scale1, pos1 = read_frame(vid_path, frames[1], vid_bbox, vid_x)
+            I1, joints1, scale1, pos1 = read_frame(vid_path, frames[1], vid_bbox, vid_x) 
+
+            if I0 is None: 
+                print("Image is None \n")
+                continue
+
+            if I1 is None: 
+                print("IMG2 is None\n")
+                continue
 
             if scale0 > scale1:
                 scale = scale_factor / scale0
             else:
                 scale = scale_factor / scale1
 
+            #if scale == 0: 
+                #pdb.set_trace()
             pos = (pos0 + pos1) / 2.0
 
             I0, joints0 = center_and_scale_image(I0, img_width, img_height, pos, scale, joints0)
             I1, joints1 = center_and_scale_image(I1, img_width, img_height, pos, scale, joints1)
+
 
             I0 = (I0 / 255.0 - 0.5) * 2.0
             I1 = (I1 / 255.0 - 0.5) * 2.0
@@ -107,6 +197,8 @@ def warp_example_generator(vid_info_list, param, do_augment=True, return_pose_ve
                 rflip, rscale, rshift, rdegree, rsat = rand_augmentations(param)
                 I0, joints0 = augment(I0, joints0, rflip, rscale, rshift, rdegree, rsat, img_height, img_width)
                 I1, joints1 = augment(I1, joints1, rflip, rscale, rshift, rdegree, rsat, img_height, img_width)
+
+
 
             posemap0 = make_joint_heatmaps(img_height, img_width, joints0, sigma_joint, pose_dn)
             posemap1 = make_joint_heatmaps(img_height, img_width, joints1, sigma_joint, pose_dn)
@@ -126,6 +218,7 @@ def warp_example_generator(vid_info_list, param, do_augment=True, return_pose_ve
             x_posevec_tgt[i, :] = joints1.flatten()
 
             y[i, :, :, :] = I1
+            i+=1
 
         out = [x_src, x_pose_src, x_pose_tgt, x_mask_src, x_trans]
 
@@ -146,6 +239,26 @@ def create_feed(params, data_dir, mode, do_augment=True, return_pose_vectors=Fal
 
     return feed
 
+
+def create_feed_canon(params, data_dir, mode, do_augment=True, return_pose_vectors=False, transfer=False):
+    vid_info_list = make_vid_info_list_pickled(data_dir + '/' + mode)
+
+    if transfer:
+        feed = transfer_example_generator(ex_list, ex_list, params)
+    else:
+        feed = warp_example_generator(vid_info_list, params, do_augment, return_pose_vectors)
+
+    return feed
+
+def create_test_feed(params, data_dir, mode, do_augment=True, return_pose_vectors=False, transfer=False):
+    vid_info_list = make_vid_info_list_pickled_test(data_dir + '/' + mode)
+
+    if transfer:
+        feed = transfer_example_generator(ex_list, ex_list, params)
+    else:
+        feed = warp_example_generator(vid_info_list, params, do_augment, return_pose_vectors)
+
+    return feed
 
 '''
 def transfer_example_generator(examples0, examples1, param):
@@ -212,13 +325,13 @@ def transfer_example_generator(examples0, examples1, param):
 
 
 def actionExampleGenerator(examples,param,return_pose_vectors=False):
-    
+
 	img_width = param['IMG_WIDTH']
 	img_height = param['IMG_HEIGHT']
 	pose_dn = param['posemap_downsample']
 	sigma_joint = param['sigma_joint']
 	n_joints = param['n_joints']
-	scale_factor = param['obj_scale_factor']	
+	scale_factor = param['obj_scale_factor']
 
 	while True:
 
@@ -226,16 +339,16 @@ def actionExampleGenerator(examples,param,return_pose_vectors=False):
 		scale = scale_factor/scale0
 		I0,joints0 = centerAndScaleImage(I0,img_width,img_height,pos0,scale,joints0)
 		posemap0 = makeJointHeatmaps(img_height,img_width,joints0,sigma_joint,pose_dn)
-		
-		src_limb_masks = makeLimbMasks(joints0,img_width,img_height)	
+
+		src_limb_masks = makeLimbMasks(joints0,img_width,img_height)
 		bg_mask = np.expand_dims(1.0 - np.amax(src_limb_masks,axis=2),2)
 		src_masks = np.log(np.concatenate((bg_mask,src_limb_masks),axis=2)+1e-10)
-	
-		for i in range(1,len(examples)):	
+
+		for i in range(1,len(examples)):
 			I1,joints1,scale1,pos1 = readExampleInfo(examples[i])
 			I1,joints1 = centerAndScaleImage(I1,img_width,img_height,pos0,scale,joints1)
 			posemap1 = makeJointHeatmaps(img_height,img_width,joints1,sigma_joint,pose_dn)
-	
+
 			X_src = np.expand_dims(I0,0)
 			X_pose_src = np.expand_dims(posemap0,0)
 			X_pose_tgt = np.expand_dims(posemap1,0)
@@ -247,7 +360,7 @@ def actionExampleGenerator(examples,param,return_pose_vectors=False):
 			X_posevec_tgt = np.expand_dims(joints1.flatten(),0)
 
 			Y[i,:,:,:] = I1
-	
+
 			if(not return_pose_vectors):
 				yield ([X_src,X_pose_src,X_pose_tgt,X_mask_src,X_trans],Y)
 			else:
@@ -294,11 +407,26 @@ def augment(I, joints, rflip, rscale, rshift, rdegree, rsat, img_height, img_wid
     I = aug_saturation(I, rsat)
     return I, joints
 
-
+"""
 def center_and_scale_image(I, img_width, img_height, pos, scale, joints):
-    I = cv2.resize(I, (0, 0), fx=scale, fy=scale)
+    I = cv2.resize(I, (0, 0), fx= scale, fy = scale)
     joints = joints * scale
+    pdb.set_trace()
+    x_offset = (img_width - 1.0) / 2.0 - pos[0] * scale
+    y_offset = (img_height - 1.0) / 2.0 - pos[1] * scale
 
+    T = np.float32([[1, 0, x_offset], [0, 1, y_offset]])
+    I = cv2.warpAffine(I, T, (img_width, img_height))
+
+    joints[:, 0] += x_offset
+    joints[:, 1] += y_offset
+    pdb.set_trace()
+    return I, joints
+"""
+def center_and_scale_image(I, img_width, img_height, pos, scale, joints):
+    scale = 0.355555
+    I = cv2.resize(I, (0, 0), fx= scale, fy = scale)
+    joints = joints * scale
     x_offset = (img_width - 1.0) / 2.0 - pos[0] * scale
     y_offset = (img_height - 1.0) / 2.0 - pos[1] * scale
 
@@ -309,7 +437,6 @@ def center_and_scale_image(I, img_width, img_height, pos, scale, joints):
     joints[:, 1] += y_offset
 
     return I, joints
-
 
 def aug_joint_shift(joints, max_joint_shift):
     joints += (np.random.rand(joints.shape) * 2 - 1) * max_joint_shift
