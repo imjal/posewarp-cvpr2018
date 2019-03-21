@@ -12,6 +12,7 @@ from keras.backend.tensorflow_backend import set_session
 from keras.optimizers import Adam
 from PIL import Image
 import numpy as np
+from html4vision import Col, imagetable
 
 
 def test(model_name, gpu_id):
@@ -37,7 +38,7 @@ def test(model_name, gpu_id):
     networks.make_trainable(vgg_model, False)
     response_weights = sio.loadmat('../data/vgg_activation_distribution_train.mat')
     model = networks.network_posewarp(params)
-    model.load_weights('/home/jl5/posewarp-cvpr2018/models/orig-model/5000.h5')
+    model.load_weights('/home/jl5/posewarp-cvpr2018/models/orig-train-set/18000.h5')
     model.compile(optimizer=Adam(lr=1e-4), loss=[networks.vgg_loss(vgg_model, response_weights, 12)])
 
     model.summary()
@@ -48,12 +49,19 @@ def test(model_name, gpu_id):
         arr_loss = model.predict_on_batch(x)
         for i in range(params['batch_size']): 
             img = arr_loss[i]
-            cv2.imwrite(save_dir + '/' + str(step) + '_' + str(i) + '.png', ((img + 1) * 128).astype('uint8'))
+            cv2.imwrite(save_dir + '/' + str(step) + '_' + str(i) + 'generated.png', ((img + 1) * 128).astype('uint8'))
             cv2.imwrite(save_dir + '/' + str(step) + '_' + str(i) + 'source'+ '.png', ((x[0][i] + 1) * 128).astype('uint8'))
             cv2.imwrite(save_dir + '/' + str(step) + '_' + str(i) + 'target' +'.png', ((y[i] + 1) * 128).astype('uint8'))
-            pdb.set_trace()
+    
+    cols = [
+        Col('id1', 'ID'), # make a column of 1-based indices
+        Col('img', 'Source',  '../saved_imgs/orig-train-set'+ '/*source.png'), # specify image content for column 2
+        Col('img', 'Target',  '../saved_imgs/orig-train-set' + '/*target.png'), # specify image content for column 3
+        Col('img', 'Generated', '../saved_imgs/orig-train-set'  + '/*generated.png')
+    ]
 
-
+    # html table generation
+    imagetable(cols, outfile='../saved_results/orig-model_18000.html')
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
