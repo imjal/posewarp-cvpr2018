@@ -6,10 +6,11 @@ import scipy.io as sio
 import glob
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from PIL import Image
+from PIL import Image, ImageDraw
 import pdb
 import pickle
 import glob
+from skimage.morphology import convex_hull_image
 
 
 def make_vid_info_list(data_dir):
@@ -50,7 +51,7 @@ def show_keypoints(im, x):
     plt.scatter(x[:, 0], x[:, 1])
     ax.imshow(im)
     plt.show()
-    plt.savefig("/home/jl5/img1.png")
+    plt.savefig("/home/jl5/tgt_pose.png")
 
 def make_vid_info_list_pickled(data_dir):
     vids = glob.glob(data_dir + '/orig-frames/*')
@@ -133,10 +134,42 @@ def read_frame(vid_name, frame_num, box, x):
 def mask_torso(src_mask_prior, trans_in, i, img_width, img_height):
     T = np.repeat(np.expand_dims(src_mask_prior[i][..., 10], 3), 3, 2)
     T1 = 255 - T.astype('uint8')
-    T1[T1 < 254] = 0
-    T1[T1 >= 254] = 1
+    T1[T1 < 100] = 0
+    T1[T1 >= 100] = 1
     warped_mask = cv2.warpAffine(T1, trans_in[i][..., 10], (img_width, img_height))
     return warped_mask
+
+"""img = Image.new('L', (img_width, img_height), 0)
+                ImageDraw.Draw(img).polygon(vertices, outline=1, fill=1)
+                mask = np.array(img)
+                mask_convex = convex_hull_image(mask)"""
+
+def mask_torso_tgt(joints_tgt, i, img_width, img_height):
+    torso = [2, 5, 8, 11]
+    vertices = []
+    for i in torso:
+        if any(pt < 0 for pt in joints_tgt[i]):
+            if i == 2:
+                vertices.append([50, 0])
+            if i == 5: 
+                vertices.append([200, 0])
+            if i == 8: 
+                vertices.append([int(joints_tgt[2][0]), 250])
+            if i == 11: 
+                vertices.append([int(joints_tgt[5][0]), 250])
+        vertices += [tuple([int(x) for x in joints_tgt[i]])]
+    print(vertices)
+    clusterMask = np.zeros((img_width, img_height))
+    height = max(abs(joints_tgt[8][1] - joints_tgt[2][1]), abs(joints_tgt[11][1] - joints_tgt[5][1]))
+    width = max(abs(joints_tgt[5][0] - joints_tgt[2][0]), abs(joints_tgt[11][0] - joints_tgt[8][0]))
+    point = [min(vertices[0][0], vertices[1][0]), max(vertices[0][1], vertices[1][1])]
+    clusterMask[point[1] : point[1] + int(height), point[0] : point[0] + int(width)] = 1
+    print(height)
+    print(width)
+    print(point)
+    pdb.set_trace()
+    T = np.repeat(np.expand_dims(clusterMask, 2), 3, 2)
+    return T
 
 
 def warp_example_generator(vid_info_list, param, do_augment=True, return_pose_vectors=False):
@@ -181,6 +214,8 @@ def warp_example_generator(vid_info_list, param, do_augment=True, return_pose_ve
             I0, joints0, scale0, pos0 = read_frame(vid_path, frames[0], vid_bbox, vid_x)
             I1, joints1, scale1, pos1 = read_frame(vid_path, frames[1], vid_bbox, vid_x)
 
+
+
             if I0 is None:
                 print("Image is None \n")
                 continue
@@ -201,6 +236,7 @@ def warp_example_generator(vid_info_list, param, do_augment=True, return_pose_ve
             I0, joints0 = center_and_scale_image(I0, img_width, img_height, pos, scale, joints0)
             I1, joints1 = center_and_scale_image(I1, img_width, img_height, pos, scale, joints1)
 
+            show_keypoints(I1, joints1)
 
             I0 = (I0 / 255.0 - 0.5) * 2.0
             I1 = (I1 / 255.0 - 0.5) * 2.0
@@ -230,8 +266,12 @@ def warp_example_generator(vid_info_list, param, do_augment=True, return_pose_ve
             x_posevec_tgt[i, :] = joints1.flatten()
 
             y[i, :, :, :] = I1
-            x_torso_mask[i, :, :, :] = mask_torso(x_mask_src, x_trans, i, img_width, img_height)
+            x_torso_mask[i, :, :, :] = mask_torso_tgt(joints1, i, img_width, img_height)
             output_masked[i, :, :, :] = y[i] * x_torso_mask[i]
+            """cv2.imwrite("/home/jl5/source.png", (x_src[i]+1)*128)
+            cv2.imwrite("/home/jl5/tgt_mask.png", (x_torso_mask[i]*255))
+            cv2.imwrite("/home/jl5/target.png", (y[i]+1)*128)
+            pdb.set_trace()"""
 
             i+=1
         out = [x_src, x_pose_src, x_pose_tgt, x_mask_src, x_trans, x_torso_mask]
