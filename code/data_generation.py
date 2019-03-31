@@ -25,6 +25,7 @@ def make_vid_info_list(data_dir):
 
         box = info['data']['bbox'][0][0]
         x = info['data']['X'][0][0]
+        pdb.set_trace()
 
         vid_info.append([info, box, x, vids[i]])
 
@@ -70,13 +71,12 @@ def make_vid_info_list_pickled(data_dir):
         #show_box_and_keypoints('/data/jl5/data-posewarp/train/orig-frames/' + str(i) + '/000001.png', boxes, keypoints, 0)
     return vid_info
 
-def make_vid_info_list_pickled_test(data_dir):
+def make_vid_info_list_pickled_vidnum(data_dir, i):
     vids = glob.glob(data_dir + '/orig-frames/*')
     n_vids = len(vids)
     vid_path = "/home/jl5/pytorch-EverybodyDanceNow/code/"
     vid_info = []
 
-    i = 9
     keypoints = pickle.load(open(vid_path + "keypoints_vid"+str(i)+".pkl", "rb"))
     keypoints[:, 0, :] = keypoints[:, 0, :]*1.40625 + 280
     keypoints[:, 1, :] = keypoints[:, 1, :]*1.40625
@@ -98,7 +98,7 @@ def get_person_scale(joints):
 
     rforearm_size = np.sqrt((joints[3][1] - joints[4][1]) ** 2 + (joints[3][0] - joints[4][0]) ** 2)
     lforearm_size = np.sqrt((joints[6][1] - joints[7][1]) ** 2 + (joints[6][0] - joints[7][0]) ** 2)
-    forearm_size = (lforearm_size + rforearm_size) / 2.0 
+    forearm_size = (lforearm_size + rforearm_size) / 2.0
     size = np.max([2.5 * upper_body_size, 5.0 * forearm_size])
     if size <= 0:
         return 1
@@ -110,7 +110,7 @@ def get_person_scale(joints):
         img_name = os.path.join(vid_name, f'{frame_num +1:06d}' + '.jpg')
 """
 def read_frame(vid_name, frame_num, box, x):
-    
+
     img_name = os.path.join(vid_name, f'{frame_num +1:06d}' + '.png')
     if not os.path.isfile(img_name):
         img_name = os.path.join(vid_name, f'{frame_num +1:06d}' + '.jpg')
@@ -120,7 +120,7 @@ def read_frame(vid_name, frame_num, box, x):
         img_name = os.path.join(vid_name, str(frame_num + 1) + '.jpg')
     """
     img = cv2.imread(img_name)
-    joints = x[:, :, frame_num] - 1.0
+    joints = x[:, :, frame_num] + 1.0
     box_frame = box[frame_num, :]
     scale = get_person_scale(joints)
     pos = np.zeros(2)
@@ -128,6 +128,15 @@ def read_frame(vid_name, frame_num, box, x):
     pos[1] = (box_frame[1] + box_frame[3] / 2.0)
 
     return img, joints, scale, pos
+
+
+def mask_torso(src_mask_prior, trans_in, i, img_width, img_height):
+    T = np.repeat(np.expand_dims(src_mask_prior[i][..., 10], 3), 3, 2)
+    T1 = 255 - T.astype('uint8')
+    T1[T1 < 254] = 0
+    T1[T1 >= 254] = 1
+    warped_mask = cv2.warpAffine(T1, trans_in[i][..., 10], (img_width, img_height))
+    return warped_mask
 
 
 def warp_example_generator(vid_info_list, param, do_augment=True, return_pose_vectors=False):
@@ -149,7 +158,10 @@ def warp_example_generator(vid_info_list, param, do_augment=True, return_pose_ve
         x_trans = np.zeros((batch_size, 2, 3, n_limbs + 1))
         x_posevec_src = np.zeros((batch_size, n_joints * 2))
         x_posevec_tgt = np.zeros((batch_size, n_joints * 2))
+        x_torso_mask =  np.zeros((batch_size, img_height, img_width, 3))
         y = np.zeros((batch_size, img_height, img_width, 3))
+        output_masked = np.zeros((batch_size, img_height, img_width, 3))
+
         i = 0
         while i < batch_size:
 
@@ -167,13 +179,13 @@ def warp_example_generator(vid_info_list, param, do_augment=True, return_pose_ve
                 frames = np.random.choice(n_frames, 2, replace=False)
 
             I0, joints0, scale0, pos0 = read_frame(vid_path, frames[0], vid_bbox, vid_x)
-            I1, joints1, scale1, pos1 = read_frame(vid_path, frames[1], vid_bbox, vid_x) 
+            I1, joints1, scale1, pos1 = read_frame(vid_path, frames[1], vid_bbox, vid_x)
 
-            if I0 is None: 
+            if I0 is None:
                 print("Image is None \n")
                 continue
 
-            if I1 is None: 
+            if I1 is None:
                 print("IMG2 is None\n")
                 continue
 
@@ -182,7 +194,7 @@ def warp_example_generator(vid_info_list, param, do_augment=True, return_pose_ve
             else:
                 scale = scale_factor / scale1
 
-            #if scale == 0: 
+            #if scale == 0:
                 #pdb.set_trace()
             pos = (pos0 + pos1) / 2.0
 
@@ -218,15 +230,16 @@ def warp_example_generator(vid_info_list, param, do_augment=True, return_pose_ve
             x_posevec_tgt[i, :] = joints1.flatten()
 
             y[i, :, :, :] = I1
+            x_torso_mask[i, :, :, :] = mask_torso(x_mask_src, x_trans, i, img_width, img_height)
+            output_masked[i, :, :, :] = y[i] * x_torso_mask[i]
+
             i+=1
-
-        out = [x_src, x_pose_src, x_pose_tgt, x_mask_src, x_trans]
-
+        out = [x_src, x_pose_src, x_pose_tgt, x_mask_src, x_trans, x_torso_mask]
         if return_pose_vectors:
             out.append(x_posevec_src)
             out.append(x_posevec_tgt)
 
-        yield (out, y)
+        yield (out, [y, output_masked])
 
 
 def create_feed(params, data_dir, mode, do_augment=True, return_pose_vectors=False, transfer=False):
@@ -251,7 +264,17 @@ def create_feed_canon(params, data_dir, mode, do_augment=True, return_pose_vecto
     return feed
 
 def create_test_feed(params, data_dir, mode, do_augment=True, return_pose_vectors=False, transfer=False):
-    vid_info_list = make_vid_info_list_pickled_test(data_dir + '/' + mode)
+    vid_info_list = make_vid_info_list_pickled_vidnum(data_dir + '/' + mode, 9)
+
+    if transfer:
+        feed = transfer_example_generator(ex_list, ex_list, params)
+    else:
+        feed = warp_example_generator(vid_info_list, params, do_augment, return_pose_vectors)
+
+    return feed
+
+def create_vidi_feed(params, data_dir, mode, i, do_augment=True, return_pose_vectors=False, transfer=False):
+    vid_info_list = make_vid_info_list_pickled_vidnum(data_dir + '/' + mode, i)
 
     if transfer:
         feed = transfer_example_generator(ex_list, ex_list, params)
