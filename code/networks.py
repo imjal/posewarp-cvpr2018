@@ -120,7 +120,7 @@ def repeat(x,n_repeats):
     rep = tf.cast(rep, dtype='int32')
     x = tf.matmul(tf.reshape(x, (-1, 1)), rep)
     return tf.reshape(x,[-1])
-        
+
 def meshgrid(height, width):
     x_t = tf.matmul(tf.ones(shape=tf.stack([height, 1])),
                     tf.transpose(tf.expand_dims(tf.linspace(0.0,
@@ -129,11 +129,11 @@ def meshgrid(height, width):
                     tf.cast(height,tf.float32)-1.0, height), 1),
                     tf.ones(shape=tf.stack([1, width])))
     return x_t,y_t
-        
+
 def interpolate(im,x,y):
-            
+
     im = tf.pad(im,[[0,0],[1,1],[1,1],[0,0]],"REFLECT")
-                
+
     num_batch = tf.shape(im)[0]
     height = tf.shape(im)[1]
     width = tf.shape(im)[2]
@@ -141,26 +141,26 @@ def interpolate(im,x,y):
 
     out_height = tf.shape(x)[1]
     out_width = tf.shape(x)[2]
-                
+
     x = tf.reshape(x,[-1])
     y = tf.reshape(y,[-1])
-                
+
     x = tf.cast(x, 'float32')+1
     y = tf.cast(y, 'float32')+1
-                
+
     max_x = tf.cast(width - 1, 'int32')
     max_y = tf.cast(height - 1, 'int32')
-                
+
     x0 = tf.cast(tf.floor(x), 'int32')
     x1 = x0 + 1
     y0 = tf.cast(tf.floor(y), 'int32')
     y1 = y0 + 1
-                
+
     x0 = tf.clip_by_value(x0, 0, max_x)
     x1 = tf.clip_by_value(x1, 0, max_x)
     y0 = tf.clip_by_value(y0, 0, max_y)
     y1 = tf.clip_by_value(y1, 0, max_y)
-                
+
     base = repeat(tf.range(num_batch)*width*height, (out_height*out_width))
 
     base_y0 = base + y0*width
@@ -170,29 +170,29 @@ def interpolate(im,x,y):
     idx_b = base_y1 + x0
     idx_c = base_y0 + x1
     idx_d = base_y1 + x1
-                
+
     # use indices to lookup pixels in the flat image and restore
     # channels dim
     im_flat = tf.reshape(im, tf.stack([-1, channels]))
     im_flat = tf.cast(im_flat, 'float32')
-                
+
     Ia = tf.gather(im_flat, idx_a)
     Ib = tf.gather(im_flat, idx_b)
     Ic = tf.gather(im_flat, idx_c)
     Id = tf.gather(im_flat, idx_d)
-                
+
     # and finally calculate interpolated values
     x1_f = tf.cast(x1, 'float32')
     y1_f = tf.cast(y1, 'float32')
-                
+
     dx = x1_f - x
     dy = y1_f - y
-                
+
     wa = tf.expand_dims((dx * dy), 1)
     wb = tf.expand_dims((dx * (1-dy)), 1)
     wc = tf.expand_dims(((1-dx) * dy), 1)
     wd = tf.expand_dims(((1-dx) * (1-dy)), 1)
-                
+
     output = tf.add_n([wa*Ia, wb*Ib, wc*Ic, wd*Id])
     output = tf.reshape(output, tf.stack([-1,out_height,out_width,channels]))
     return output
@@ -220,7 +220,7 @@ def affine_warp(im, theta):
     x_s = tf.reshape(x_s, [num_batch, height, width])
     y_s = tf.reshape(y_s, [num_batch, height, width])
 
-    return interpolate(im, x_s, y_s)    
+    return interpolate(im, x_s, y_s)
 
 
 def make_warped_stack(args):
@@ -336,16 +336,16 @@ def network_posewarp(param):
     #x = unet(src_in, pose_src, [64]*2 + [128]*9, [128]*4 + [32])
     #src_mask_delta = my_conv(x, 11, activation='linear')
     #src_mask = keras.layers.add([ src_mask_delta, src_mask_prior])
-    #src_mask = Activation('softmax', name='mask_src')(src_mask)
+    src_mask = Activation('softmax', name='mask_src')(src_mask_prior)
 
     # 2. Separate into fg limbs and background
-    warped_stack = Lambda(make_warped_stack)([src_mask_prior, src_in, trans_in])
+    warped_stack = Lambda(make_warped_stack)([src_mask, src_in, trans_in])
     #temp = Lambda(make_warped_stack)([src_mask_prior, src_in, trans_in])
     fg_stack = Lambda(lambda arg: arg[:, :, :, 3:], output_shape=(img_h, img_w, 3*n_limbs),
                       name='fg_stack')(warped_stack)
     bg_src = Lambda(lambda arg: arg[:, :, :, 0:3], output_shape=(img_h, img_w, 3),
                     name='bg_src')(warped_stack)
-    bg_src_mask = Lambda(lambda arg: tf.expand_dims(arg[:, :, :, 0], 3))(src_mask_prior)
+    bg_src_mask = Lambda(lambda arg: tf.expand_dims(arg[:, :, :, 0], 3))(src_mask)
 
     # 3. BG/FG synthesis
     x = unet(concatenate([bg_src, bg_src_mask]), pose_src, [64]*2 + [128]*9, [128]*4 + [64])
