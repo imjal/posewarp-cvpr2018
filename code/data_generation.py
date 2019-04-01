@@ -158,16 +158,13 @@ def mask_torso_tgt(joints_tgt, i, img_width, img_height):
             if i == 11: 
                 vertices.append([int(joints_tgt[5][0]), 250])
         vertices += [tuple([int(x) for x in joints_tgt[i]])]
-    print(vertices)
+
     clusterMask = np.zeros((img_width, img_height))
     height = max(abs(joints_tgt[8][1] - joints_tgt[2][1]), abs(joints_tgt[11][1] - joints_tgt[5][1]))
     width = max(abs(joints_tgt[5][0] - joints_tgt[2][0]), abs(joints_tgt[11][0] - joints_tgt[8][0]))
     point = [min(vertices[0][0], vertices[1][0]), max(vertices[0][1], vertices[1][1])]
     clusterMask[point[1] : point[1] + int(height), point[0] : point[0] + int(width)] = 1
-    print(height)
-    print(width)
-    print(point)
-    pdb.set_trace()
+
     T = np.repeat(np.expand_dims(clusterMask, 2), 3, 2)
     return T
 
@@ -266,7 +263,8 @@ def warp_example_generator(vid_info_list, param, do_augment=True, return_pose_ve
             x_posevec_tgt[i, :] = joints1.flatten()
 
             y[i, :, :, :] = I1
-            x_torso_mask[i, :, :, :] = mask_torso_tgt(joints1, i, img_width, img_height)
+            x_torso_mask[i, :, :, :] = mask_torso(x_mask_src, x_trans, i, img_width, img_height)
+            # x_torso_mask[i, :, :, :] = mask_torso_tgt(joints1, i, img_width, img_height)
             output_masked[i, :, :, :] = y[i] * x_torso_mask[i]
             """cv2.imwrite("/home/jl5/source.png", (x_src[i]+1)*128)
             cv2.imwrite("/home/jl5/tgt_mask.png", (x_torso_mask[i]*255))
