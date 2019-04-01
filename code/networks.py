@@ -390,7 +390,7 @@ def network_posewarp1(param):
 
     return model
 
-# Used for Masked_loss Experiment 
+# Used for Masked_loss Experiment
 def network_posewarp(param):
     img_h = param['IMG_HEIGHT']
     img_w = param['IMG_WIDTH']
@@ -407,10 +407,10 @@ def network_posewarp(param):
     torso_mask = Input(shape = (img_h, img_w, 3))
 
     # 1. FG/BG separation
-    x = unet(src_in, pose_src, [64]*2 + [128]*9, [128]*4 + [32])
-    src_mask_delta = my_conv(x, 11, activation='linear')
-    src_mask = keras.layers.add([src_mask_delta, src_mask_prior])
-    src_mask = Activation('softmax', name='mask_src')(src_mask)
+    #x = unet(src_in, pose_src, [64]*2 + [128]*9, [128]*4 + [32])
+    #src_mask_delta = my_conv(x, 11, activation='linear')
+    #src_mask = keras.layers.add([src_mask_delta, src_mask_prior])
+    src_mask = Activation('softmax', name='mask_src')(src_mask_prior)
 
     # 2. Separate into fg limbs and background
     warped_stack = Lambda(make_warped_stack)([src_mask, src_in, trans_in])
