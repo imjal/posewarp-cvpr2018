@@ -38,7 +38,7 @@ def test(model_name, gpu_id):
     networks.make_trainable(vgg_model, False)
     response_weights = sio.loadmat('../data/vgg_activation_distribution_train.mat')
     model = networks.network_posewarp(params)
-    model.load_weights('/home/jl5/posewarp-cvpr2018/models/torso_rect_1/23000.h5')
+    model.load_weights('/home/jl5/posewarp-cvpr2018/models/torso_wodelt_50/23000.h5')
     #model.compile(optimizer=Adam(lr=1e-4), loss=[networks.vgg_loss(vgg_model, response_weights, 12)])
 
     #model.summary()
