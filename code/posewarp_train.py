@@ -9,6 +9,7 @@ import util
 import truncated_vgg
 from keras.backend.tensorflow_backend import set_session
 from keras.optimizers import Adam
+import keras
 
 
 def train(model_name, gpu_id):
@@ -30,11 +31,16 @@ def train(model_name, gpu_id):
     networks.make_trainable(vgg_model, False)
     response_weights = sio.loadmat('../data/vgg_activation_distribution_train.mat')
     model = networks.network_posewarp(params)
+    #model.load_weights('/home/jl5/posewarp-cvpr2018/models/pretrained-vid0/23000.h5')
     model.compile(optimizer=Adam(lr=1e-4), loss=[networks.vgg_loss(vgg_model, response_weights, 12)])
 
     model.summary()
     n_iters = params['n_training_iter']
+    tensorboard = keras.callbacks.TensorBoard(log_dir='../models/' + model_name + '/logs/', update_freq = 1000)
+    checkpoint = keras.callbacks.ModelCheckpoint("../models/" + model_name +"{epoch:02d}.hdf5", verbose=1)
+    model.fit_generator(train_feed, steps_per_epoch=1000, epochs=50000, callbacks=[tensorboard, checkpoint])
 
+    """
     for step in range(n_iters+1):
         x, y = next(train_feed)
 
@@ -44,7 +50,7 @@ def train(model_name, gpu_id):
 
         if step > 0 and step % params['model_save_interval'] == 0:
             model.save(network_dir + '/' + str(step) + '.h5')
-
+    """
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
