@@ -31,7 +31,7 @@ def train(model_name, gpu_id):
     response_weights = sio.loadmat('../data/vgg_activation_distribution_train.mat')
     model = networks.network_posewarp(params)
     #model.load_weights('/home/jl5/posewarp-cvpr2018/models/pretrained-vid0/23000.h5')
-    model.compile(optimizer=Adam(lr=1e-4), loss=[networks.vgg_loss(vgg_model, response_weights, 12), networks.vgg_loss(vgg_model, response_weights, 12)], loss_weights = [1.0, 5.0])
+    model.compile(optimizer=Adam(lr=1e-4), loss=[networks.vgg_loss(vgg_model, response_weights, 12), networks.vgg_loss(vgg_model, response_weights, 12)], loss_weights = [1.0, 1.0])
 
     model.summary()
     n_iters = params['n_training_iter']

@@ -139,12 +139,42 @@ def mask_torso(src_mask_prior, trans_in, i, img_width, img_height):
     warped_mask = cv2.warpAffine(T1, trans_in[i][..., 10], (img_width, img_height))
     return warped_mask
 
-"""img = Image.new('L', (img_width, img_height), 0)
-                ImageDraw.Draw(img).polygon(vertices, outline=1, fill=1)
-                mask = np.array(img)
-                mask_convex = convex_hull_image(mask)"""
+"""
+if any(pt < 0 for pt in joints_tgt[i]):
+            if i == 2:
+                vertices.append((50, 0))
+            if i == 5: 
+                vertices.append((200, 0))
+            if i == 8: 
+                vertices.append((int(joints_tgt[2][0]), 250))
+            if i == 11: 
+                vertices.append((int(joints_tgt[5][0]), 250))
+        vertices += [tuple([int(x) for x in joints_tgt[i]])]
+"""
+def mask_torso_convex(joints_tgt, img_width, img_height):
+    torso = [2, 5, 11, 8]
+    vertices = []
+    for i in torso:
+        if any(pt < 0 for pt in joints_tgt[i]):
+            if i == 2:
+                vertices.append([50, 0])
+            if i == 5: 
+                vertices.append([200, 0])
+            if i == 8: 
+                vertices.append([int(joints_tgt[2][0]), 250])
+            if i == 11: 
+                vertices.append([int(joints_tgt[5][0]), 250])
+        vertices += [[int(x) for x in joints_tgt[i]]]
+    pdb.set_trace()
+    vertices = np.array(vertices)
+    mask_convex = cv2.convexHull(vertices)
+    mask = np.zeros((256, 256))
+    cv2.drawContours(mask, mask_convex, -1, (0,255,0), 3)
+    T = np.repeat(np.expand_dims(mask, 2), 3, 2)
+    pdb.set_trace()
+    return T
 
-def mask_torso_tgt(joints_tgt, i, img_width, img_height):
+def mask_torso_tgt(joints_tgt, img_width, img_height):
     torso = [2, 5, 8, 11]
     vertices = []
     for i in torso:
@@ -233,7 +263,6 @@ def warp_example_generator(vid_info_list, param, do_augment=True, return_pose_ve
             I0, joints0 = center_and_scale_image(I0, img_width, img_height, pos, scale, joints0)
             I1, joints1 = center_and_scale_image(I1, img_width, img_height, pos, scale, joints1)
 
-            show_keypoints(I1, joints1)
 
             I0 = (I0 / 255.0 - 0.5) * 2.0
             I1 = (I1 / 255.0 - 0.5) * 2.0
@@ -263,8 +292,9 @@ def warp_example_generator(vid_info_list, param, do_augment=True, return_pose_ve
             x_posevec_tgt[i, :] = joints1.flatten()
 
             y[i, :, :, :] = I1
-            x_torso_mask[i, :, :, :] = mask_torso(x_mask_src, x_trans, i, img_width, img_height)
-            # x_torso_mask[i, :, :, :] = mask_torso_tgt(joints1, i, img_width, img_height)
+            # x_torso_mask[i, :, :, :] = mask_torso(x_mask_src, x_trans, i, img_width, img_height) # prior mask for Torso
+            #x_torso_mask[i, :, :, :] = mask_torso_convex(joints1, img_width, img_height)
+            x_torso_mask[i, :, :, :] = mask_torso_tgt(joints1, img_width, img_height)
             output_masked[i, :, :, :] = y[i] * x_torso_mask[i]
             """cv2.imwrite("/home/jl5/source.png", (x_src[i]+1)*128)
             cv2.imwrite("/home/jl5/tgt_mask.png", (x_torso_mask[i]*255))
