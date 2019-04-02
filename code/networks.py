@@ -290,9 +290,9 @@ def network_posewarp(param):
     trans_in = Input(shape=(2, 3, n_limbs+1))
 
     # 1. FG/BG separation
-    # x = unet(src_in, pose_src, [64]*2 + [128]*9, [128]*4 + [32])
-    # src_mask_delta = my_conv(x, 11, activation='linear')
-    # src_mask = keras.layers.add([src_mask_delta, src_mask_prior])
+    x = unet(src_in, pose_src, [64]*2 + [128]*9, [128]*4 + [32])
+    src_mask_delta = my_conv(x, 11, activation='linear')
+    src_mask = keras.layers.add([src_mask_delta, src_mask_prior])
     src_mask = Activation('softmax', name='mask_src')(src_mask_prior)
 
     # 2. Separate into fg limbs and background
