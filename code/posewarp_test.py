@@ -38,7 +38,7 @@ def test(model_name, gpu_id):
     networks.make_trainable(vgg_model, False)
     response_weights = sio.loadmat('../data/vgg_activation_distribution_train.mat')
     model = networks.network_posewarp(params)
-    model.load_weights('/home/jl5/posewarp-cvpr2018/models/prior1/20000.h5')
+    model.load_weights('/home/jl5/posewarp-cvpr2018/models/orig-train-set/18000.h5')
     #model.compile(optimizer=Adam(lr=1e-4), loss=[networks.vgg_loss(vgg_model, response_weights, 12)])
 
     model.summary()
@@ -48,7 +48,11 @@ def test(model_name, gpu_id):
         x, y = next(train_feed)
         arr_out = model.predict_on_batch(x)
         for i in range(params['batch_size']):
-            cv2.imwrite(save_dir + '/' + str(step) + '_' + str(i) + 'generated.png', ((arr_out[i] + 1) * 128).astype('uint8'))
+            for j in range(11):
+                cv2.imwrite(save_dir + '/' +  str(step) + '_' + str(i) + "_limb" + str(j)+  ".png", ((x[3][i][..., j] + 1)*128))
+                cv2.imwrite(save_dir + '/' + str(step) + '_' + str(i) + '_warped' + str(j) + '.png', (arr_out[1][i][..., 3*j:3*j+3]+1)*128)
+
+            cv2.imwrite(save_dir + '/' + str(step) + '_' + str(i) + 'generated.png', ((arr_out[0][i] + 1) * 128).astype('uint8'))
             cv2.imwrite(save_dir + '/' + str(step) + '_' + str(i) + 'source'+ '.png', ((x[0][i] + 1) * 128).astype('uint8'))
             cv2.imwrite(save_dir + '/' + str(step) + '_' + str(i) + 'target' +'.png', ((y[i] + 1) * 128).astype('uint8'))
             #cv2.imwrite(save_dir + '/' + str(step) + '_' + str(i) + 'bg_synth' +'.png', ((arr_out[1][i] + 1) * 128).astype('uint8'))
@@ -65,8 +69,19 @@ def test(model_name, gpu_id):
         #Col('img', 'Background Synth', '../saved_imgs/' + model_name  + '/*bg_synth.png'),
     ]
 
+    cols1 = []
+    for i in range(11):
+        cols1 += [Col('img', 'limb ' + str(i),  '../saved_imgs/' + model_name + '/*limb' + str(i) + "*")]
+    cols2 = []
+    for i in range(11):
+        cols2 += [Col('img', 'Limb' + str(i),  '../saved_imgs/' + model_name + '/*_warped' + str(i) + "*")]
+
     # html table generation
     imagetable(cols, outfile='../saved_results/' + model_name + '.html')
+    imagetable(cols1, outfile='../saved_results/' + model_name + "limbs" + '.html')
+    imagetable(cols2, outfile='../saved_results/' + model_name + "warped_limbs" + '.html')
+
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:

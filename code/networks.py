@@ -318,7 +318,7 @@ def unet2(x_in, pose_in, nf_enc, nf_dec):
 
     return x
 
-def network_posewarp(param):
+def network_posewarp1(param):
     img_h = param['IMG_HEIGHT']
     img_w = param['IMG_WIDTH']
     n_joints = param['n_joints']
@@ -333,9 +333,9 @@ def network_posewarp(param):
     trans_in = Input(shape=(2, 3, n_limbs+1))
 
     # 1. FG/BG separation
-    #x = unet(src_in, pose_src, [64]*2 + [128]*9, [128]*4 + [32])
-    #src_mask_delta = my_conv(x, 11, activation='linear')
-    #src_mask = keras.layers.add([ src_mask_delta, src_mask_prior])
+    x = unet(src_in, pose_src, [64]*2 + [128]*9, [128]*4 + [32])
+    src_mask_delta = my_conv(x, 11, activation='linear')
+    src_mask = keras.layers.add([ src_mask_delta, src_mask_prior])
     src_mask = Activation('softmax', name='mask_src')(src_mask_prior)
 
     # 2. Separate into fg limbs and background
@@ -365,7 +365,57 @@ def network_posewarp(param):
     bg_tgt = keras.layers.multiply([bg_tgt, bg_mask], name='bg_tgt_masked')
     y = keras.layers.add([fg_tgt, bg_tgt])
 
-    model = Model(inputs=[src_in, pose_src, pose_tgt, src_mask_prior, trans_in], outputs=[y])
+    model = Model(inputs=[src_in, pose_src, pose_tgt, src_mask_prior, trans_in], outputs=[y, warped_stack])
+
+    return model
+
+def network_posewarp(param):
+    img_h = param['IMG_HEIGHT']
+    img_w = param['IMG_WIDTH']
+    n_joints = param['n_joints']
+    pose_dn = param['posemap_downsample']
+    n_limbs = param['n_limbs']
+
+    # Inputs
+    src_in = Input(shape=(img_h, img_w, 3))
+    pose_src = Input(shape=(img_h / pose_dn, img_w / pose_dn, n_joints))
+    pose_tgt = Input(shape=(img_h / pose_dn, img_w / pose_dn, n_joints))
+    src_mask_prior = Input(shape=(img_h, img_w, n_limbs+1))
+    trans_in = Input(shape=(2, 3, n_limbs+1))
+
+    # 1. FG/BG separation
+    x = unet(src_in, pose_src, [64]*2 + [128]*9, [128]*4 + [32])
+    src_mask_delta = my_conv(x, 11, activation='linear')
+    src_mask = keras.layers.add([src_mask_delta, src_mask_prior])
+    src_mask = Activation('softmax', name='mask_src')(src_mask)
+
+    # 2. Separate into fg limbs and background
+    warped_stack = Lambda(make_warped_stack)([src_mask, src_in, trans_in])
+    fg_stack = Lambda(lambda arg: arg[:, :, :, 3:], output_shape=(img_h, img_w, 3*n_limbs),
+                      name='fg_stack')(warped_stack)
+    bg_src = Lambda(lambda arg: arg[:, :, :, 0:3], output_shape=(img_h, img_w, 3),
+                    name='bg_src')(warped_stack)
+    bg_src_mask = Lambda(lambda arg: tf.expand_dims(arg[:, :, :, 0], 3))(src_mask)
+
+    # 3. BG/FG synthesis
+    x = unet(concatenate([bg_src, bg_src_mask]), pose_src, [64]*2 + [128]*9, [128]*4 + [64])
+    bg_tgt = my_conv(x, 3, activation='tanh', name='bg_tgt')
+
+    x = unet(fg_stack, pose_tgt, [64]*2 + [128]*9, [128]*4 + [64])
+    # x = unet(fg_stack, pose_tgt, [64] + [128] * 3 + [256] * 7, [256, 256, 256, 128, 64])
+
+    fg_tgt = my_conv(x, 3, activation='tanh', name='fg_tgt')
+
+    fg_mask = my_conv(x, 1, activation='sigmoid', name='fg_mask_tgt')
+    fg_mask = concatenate([fg_mask, fg_mask, fg_mask])
+    bg_mask = Lambda(lambda arg: 1 - arg)(fg_mask)
+
+    # 5. Merge bg and fg
+    fg_tgt = keras.layers.multiply([fg_tgt, fg_mask], name='fg_tgt_masked')
+    bg_tgt = keras.layers.multiply([bg_tgt, bg_mask], name='bg_tgt_masked')
+    y = keras.layers.add([fg_tgt, bg_tgt])
+
+    model = Model(inputs=[src_in, pose_src, pose_tgt, src_mask_prior, trans_in], outputs=[y, warped_stack])
 
     return model
 
